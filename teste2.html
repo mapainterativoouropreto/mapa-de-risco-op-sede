@@ -1,0 +1,926 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Mapa de Setorização de Risco - Ouro Preto Sede</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 0;
+        background-color: #f5f5f5;
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+
+      h1 {
+        text-align: center;
+        color: #333;
+        margin: 5px 0;
+        padding: 0 10px;
+        font-size: 1.5rem;
+      }
+
+      .container {
+        display: flex;
+        height: calc(100vh - 40px);
+        overflow: hidden;
+        position: relative;
+      }
+
+      .sidebar {
+        width: 300px;
+        background: white;
+        box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+        display: flex;
+        flex-direction: column;
+        z-index: 10;
+        transition: transform 0.3s ease;
+      }
+
+      .sidebar.collapsed {
+        transform: translateX(-300px);
+      }
+
+      .toggle-sidebar {
+        position: absolute;
+        left: 300px;
+        top: 10px;
+        background: white;
+        border: 1px solid #ddd;
+        padding: 8px;
+        border-radius: 0 4px 4px 0;
+        cursor: pointer;
+        z-index: 11;
+        transition: left 0.3s ease;
+      }
+
+      .sidebar.collapsed + .toggle-sidebar {
+        left: 0;
+      }
+
+      .search-box {
+        padding: 10px;
+        border-bottom: 1px solid #eee;
+      }
+
+      .search-input {
+        width: 100%;
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        box-sizing: border-box;
+      }
+
+      .bairros-list {
+        flex: 1;
+        overflow-y: auto;
+        padding: 10px;
+      }
+
+      .bairro-item {
+        padding: 8px;
+        margin: 4px 0;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+
+      .bairro-item:hover {
+        background-color: #f0f0f0;
+      }
+
+      .modal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.5);
+        z-index: 100;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .modal-content {
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        width: 90%;
+        max-width: 500px;
+        max-height: 80vh;
+        overflow-y: auto;
+      }
+
+      .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
+      }
+
+      .modal-close {
+        background: none;
+        border: none;
+        font-size: 24px;
+        cursor: pointer;
+        padding: 0;
+      }
+
+      .risk-buttons {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 10px;
+        margin-top: 15px;
+      }
+
+      .risk-button {
+        padding: 10px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: bold;
+        transition: all 0.2s;
+      }
+
+      .risk-button.r4 {
+        background-color: #ffcdd2;
+        color: #b71c1c;
+      }
+
+      .risk-button.r4:hover {
+        background-color: #d32f2f;
+        color: white;
+      }
+
+      .risk-button.r3 {
+        background-color: #ffe0b2;
+        color: #e65100;
+      }
+
+      .risk-button.r3:hover {
+        background-color: #f57c00;
+        color: white;
+      }
+
+      .risk-button.r2 {
+        background-color: #fff9c4;
+        color: #f57f17;
+      }
+
+      .risk-button.r2:hover {
+        background-color: #fbc02d;
+        color: white;
+      }
+
+      .sectors-modal {
+        display: none;
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        z-index: 101;
+        min-width: 300px;
+      }
+
+      .sector-button {
+        display: block;
+        width: 100%;
+        padding: 8px;
+        margin: 5px 0;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        background-color: #f0f0f0;
+        transition: all 0.2s;
+      }
+
+      .sector-button:hover {
+        background-color: #e0e0e0;
+      }
+
+      .mapa-container {
+        flex: 1;
+        position: relative;
+        background-color: #ddd;
+        overflow: hidden;
+      }
+
+      .mapa-wrapper {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        transform-origin: 0 0;
+        cursor: grab;
+        min-width: 150%;
+        min-height: 150%;
+      }
+
+      .mapa-wrapper.grabbing {
+        cursor: grabbing;
+      }
+
+      .mapa {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+      }
+
+      .controles {
+        position: absolute;
+        bottom: 30px;
+        right: 20px;
+        display: flex;
+        gap: 10px;
+        z-index: 1000;
+      }
+
+      .controle {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        background-color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 18px;
+        cursor: pointer;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+        user-select: none;
+      }
+
+      .controle:hover {
+        background-color: #f0f0f0;
+      }
+
+      .info-zoom {
+        position: absolute;
+        bottom: 30px;
+        left: 20px;
+        background-color: rgba(255,255,255,0.8);
+        padding: 5px 10px;
+        border-radius: 15px;
+        font-size: 12px;
+        z-index: 1000;
+      }
+
+      .coordenadas-info {
+        position: absolute;
+        bottom: 70px;
+        left: 20px;
+        background-color: rgba(255,255,255,0.8);
+        padding: 5px 10px;
+        border-radius: 15px;
+        font-size: 12px;
+        z-index: 1000;
+      }
+
+      /* Estilos para o modal do PDF */
+      .pdf-modal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.9);
+        z-index: 200;
+        flex-direction: column;
+      }
+
+      .pdf-modal.active {
+        display: flex;
+      }
+
+      .pdf-header {
+        padding: 10px 20px;
+        background: #333;
+        color: white;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .pdf-container {
+        flex: 1;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 20px;
+        position: relative;
+      }
+
+      #pdf-viewer {
+        width: 100%;
+        height: 100%;
+        border: none;
+      }
+
+      .pdf-controls {
+        display: flex;
+        justify-content: center;
+        gap: 10px;
+        padding: 10px;
+        background: #333;
+      }
+
+      .pdf-control {
+        background: #555;
+        color: white;
+        border: none;
+        padding: 8px 15px;
+        border-radius: 4px;
+        cursor: pointer;
+      }
+
+      .pdf-control:hover {
+        background: #777;
+      }
+
+      .page-info-overlay {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: rgba(0,0,0,0.8);
+        color: white;
+        padding: 30px;
+        border-radius: 10px;
+        text-align: center;
+        z-index: 10;
+        max-width: 80%;
+        box-shadow: 0 0 20px rgba(0,0,0,0.5);
+      }
+
+      .page-info-title {
+        font-size: 24px;
+        font-weight: bold;
+        margin-bottom: 15px;
+      }
+
+      .page-info-number {
+        font-size: 36px;
+        font-weight: bold;
+        margin: 20px 0;
+        color: #4CAF50;
+      }
+
+      .page-info-instruction {
+        font-size: 18px;
+        margin-top: 20px;
+      }
+
+      .close-info-btn {
+        background: #4CAF50;
+        color: white;
+        border: none;
+        padding: 10px 25px;
+        border-radius: 5px;
+        cursor: pointer;
+        margin-top: 20px;
+        font-size: 16px;
+        transition: background 0.3s;
+      }
+
+      .close-info-btn:hover {
+        background: #45a049;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Mapa de Setorização de Risco - Ouro Preto Sede</h1>
+    <div class="container">
+      <div class="sidebar" id="sidebar">
+        <div class="search-box">
+          <input type="text" class="search-input" placeholder="Buscar bairro..." id="search-bairro">
+        </div>
+        <div class="bairros-list" id="bairros-list">
+          <!-- Bairros serão inseridos aqui via JavaScript -->
+        </div>
+      </div>
+      <button class="toggle-sidebar" id="toggle-sidebar">≡</button>
+
+      <div class="mapa-container" id="mapa-container">
+        <div class="mapa-wrapper" id="mapa-wrapper">
+          <img src="mapa1.png" alt="Mapa de Setorização de Risco - Ouro Preto Sede" class="mapa" id="mapa">
+        </div>
+
+        <div class="coordenadas-info" id="coordenadas-info"></div>
+
+        <div class="controles">
+          <div class="controle" onclick="zoomIn()">+</div>
+          <div class="controle" onclick="zoomOut()">-</div>
+          <div class="controle" onclick="resetZoom()">↻</div>
+        </div>
+        
+        <div class="info-zoom" id="info-zoom">Zoom: 100%</div>
+      </div>
+    </div>
+
+    <!-- Modal de Riscos -->
+    <div class="modal" id="risk-modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 id="modal-bairro-title"></h2>
+          <button class="modal-close" onclick="closeRiskModal()">×</button>
+        </div>
+        <div class="risk-buttons">
+          <button class="risk-button r4" onclick="showSectors('R4')">Muito Alto (R4)</button>
+          <button class="risk-button r3" onclick="showSectors('R3')">Alto (R3)</button>
+          <button class="risk-button r2" onclick="showSectors('R2')">Médio (R2)</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal de Setores -->
+    <div class="sectors-modal" id="sectors-modal">
+      <div class="modal-header">
+        <h3 id="sectors-title"></h3>
+        <button class="modal-close" onclick="closeSectorsModal()">×</button>
+      </div>
+      <div id="sectors-list">
+        <!-- Setores serão inseridos aqui via JavaScript -->
+      </div>
+    </div>
+
+    <!-- Modal do PDF -->
+    <div class="pdf-modal" id="pdf-modal">
+      <div class="pdf-header">
+        <h3>Visualização do Setor</h3>
+        <button class="modal-close" onclick="closePdfModal()">×</button>
+      </div>
+      <div class="pdf-container">
+        <div class="page-info-overlay" id="page-info-overlay">
+          <div class="page-info-title">Setor <span id="setor-display"></span></div>
+          <div class="page-info-number">Página <span id="page-display"></span></div>
+          <div class="page-info-instruction">Insira a página abaixo</div>
+          <button class="close-info-btn" onclick="closePageInfo()">Fechar esta mensagem</button>
+        </div>
+        <iframe id="pdf-viewer" src=""></iframe>
+      </div>
+      <div class="pdf-controls">
+        <button class="pdf-control" onclick="closePdfModal()">Fechar PDF</button>
+      </div>
+    </div>
+
+    <script>
+      // Lista de bairros
+      const bairros = [
+        'Alto da Cruz (13 de maio)',
+        'Centro',
+        'Jardim Esperança',
+        'Jardim Esperança (Pica-Pau)',
+        'Morro da Queimada',
+        'Nossa Senhora da Piedade',
+        'Queimada',
+        'Santana',
+        'São Cristóvão',
+        'São Francisco',
+        'São Francisco/Morro do Piolho',
+        'São João',
+        'Taquaral'
+      ];
+
+      // Mapeamento de setores para páginas do PDF (atualizado conforme sua correção)
+      const setorPaginas = {
+        'S1': 3, 'S2': 7, 'S3': 11, 'S4': 15, 'S5': 19,
+        'S6': 23, 'S7': 27, 'S8': 30, 'S9': 34, 'S10': 38,
+        'S11': 42, 'S12': 45, 'S13': 49, 'S14': 53, 'S15': 57,
+        'S16': 61, 'S17': 65, 'S18': 69, 'S19': 73, 'S20': 77,
+        'S21': 81, 'S22': 85, 'S23': 88, 'S24': 91, 'S25': 95,
+        'S26': 99, 'S27': 103, 'S28': 107, 'S29': 111, 'S30': 111,
+        'S31': 111, 'S32': 115, 'S33': 119, 'S34': 123, 'S35': 128,
+        'S36': 131, 'S37': 135, 'S38': 139, 'S39': 143, 'S40': 147,
+        'S41': 151, 'S42': 153, 'S43': 157, 'S44': 161, 'S45': 165,
+        'S46': 168, 'S47': 171, 'S48': 175, 'S49': 179, 'S50': 183,
+        'S51': 187, 'S52': 191, 'S53': 194, 'S54': 198, 'S55': 201,
+        'S56': 205, 'S57': 208, 'S58': 211, 'S59': 215, 'S60': 219,
+        'S61': 223, 'S62': 227, 'S63': 230, 'S64': 234, 'S65': 237,
+        'S66': 240, 'S67': 244, 'S68': 247, 'S69': 251, 'S70': 251,
+        'S71': 254, 'S72': 260, 'S73': 263, 'S74': 268, 'S75': 272,
+        'S76': 275, 'S77': 279, 'S78': 283, 'S79': 287, 'S80': 291,
+        'S81': 294, 'S82': 298
+      };
+
+      // URL do PDF (substitua pelo URL direto do seu PDF)
+      const PDF_URL = 'https://drive.google.com/file/d/14Qq_dqYWTkeGfjqVwEg-fhJ5j_tL3RG_/preview';
+
+      // Dados dos setores com seus riscos
+      const setoresData = {
+        'São Cristóvão': {
+          'R4': ['S1-R4', 'S2-R4', 'S4-R4'],
+          'R3': ['S3-R3', 'S5-R3', 'S6-R3'],
+          'R2': ['S7-R2', 'S8-R2']
+        },
+        'São Francisco': {
+          'R4': ['S33-R4', 'S34-R4'],
+          'R3': ['S35-R3', 'S36-R3'],
+          'R2': ['S37-R2', 'S38-R2']
+        },
+        'Alto da Cruz (13 de maio)': {
+          'R4': ['S47-R4', 'S48-R4', 'S49-R4', 'S50-R4', 'S51-R4', 'S52-R4', 'S53-R4']
+        },
+        'Centro': {
+          'R2': ['S42-R2']
+        },
+        'Morro da Queimada': {
+          'R3': ['S43-R3', 'S44-R3', 'S45-R3']
+        },
+        'Queimada': {
+          'R2': ['S46-R2']
+        },
+        'Santana': {
+          'R3': ['S54-R3', 'S55-R3', 'S56-R3']
+        },
+        'São João': {
+          'R2': ['S57-R2', 'S58-R2', 'S59-R2']
+        },
+        'Taquaral': {
+          'R2': ['S60-R2', 'S61-R2', 'S62-R2', 'S65-R2', 'S66-R2', 'S67-R2', 'S68-R2', 'S69-R2', 'S70-R2', 'S71-R2', 'S72-R2', 'S73-R2', 'S74-R2', 'S75-R2', 'S76-R2', 'S77-R2', 'S78-R2', 'S79-R2', 'S80-R2']
+        },
+        'Nossa Senhora da Piedade': {
+          'R2': ['S63-R2', 'S64-R2']
+        },
+        'Jardim Esperança (Pica-Pau)': {
+          'R2': ['S81-R2']
+        },
+        'Jardim Esperança': {
+          'R2': ['S82-R2']
+        },
+        'São Francisco/Morro do Piolho': {
+          'R3': ['S29-R3', 'S30-R3', 'S31-R3']
+        }
+      };
+
+      // Coordenadas dos setores (em porcentagem relativa ao tamanho da imagem)
+      const coordenadasSetores = {
+        'S1-R4': { x: 30.5, y: 8.2 },
+        'S2-R4': { x: 32.8, y: 9.1 },
+        'S3-R3': { x: 34.2, y: 10.5 },
+        'S4-R4': { x: 35.6, y: 11.8 },
+        'S5-R3': { x: 36.9, y: 12.4 },
+        'S6-R3': { x: 38.3, y: 13.7 },
+        'S7-R2': { x: 39.7, y: 14.9 },
+        'S8-R2': { x: 41.1, y: 16.2 },
+        'S33-R4': { x: 45.2, y: 22.1 },
+        'S34-R4': { x: 46.8, y: 23.5 },
+        'S35-R3': { x: 48.1, y: 24.8 },
+        'S36-R3': { x: 49.5, y: 26.2 },
+        'S37-R2': { x: 50.9, y: 27.6 },
+        'S38-R2': { x: 52.3, y: 28.9 }
+        // Adicione mais coordenadas conforme necessário
+      };
+
+      // Variáveis para controle do PDF
+      let currentPdfPage = 1;
+      let currentSetor = '';
+
+      // Função para popular a lista de bairros
+      function popularBairros(filtro = '') {
+        const lista = document.getElementById('bairros-list');
+        lista.innerHTML = '';
+        
+        bairros
+          .filter(bairro => bairro.toLowerCase().includes(filtro.toLowerCase()))
+          .forEach(bairro => {
+            const div = document.createElement('div');
+            div.className = 'bairro-item';
+            div.textContent = bairro;
+            div.onclick = () => showRiskModal(bairro);
+            lista.appendChild(div);
+          });
+      }
+
+      // Função para abrir o PDF na página específica
+      function abrirPDFnaPagina(setor) {
+        const pagina = setorPaginas[setor];
+        if (pagina) {
+          currentPdfPage = pagina;
+          currentSetor = setor;
+          
+          // Atualiza as informações exibidas
+          document.getElementById('setor-display').textContent = setor;
+          document.getElementById('page-display').textContent = pagina;
+          
+          // Mostra o overlay com as informações
+          document.getElementById('page-info-overlay').style.display = 'block';
+          
+          // Carrega o PDF na página correta
+          const pdfViewer = document.getElementById('pdf-viewer');
+          pdfViewer.src = `${PDF_URL}#page=${pagina}`;
+          
+          // Mostra o modal
+          document.getElementById('pdf-modal').classList.add('active');
+        }
+      }
+
+      // Função para fechar o overlay de informações
+      function closePageInfo() {
+        document.getElementById('page-info-overlay').style.display = 'none';
+      }
+
+      // Função para fechar o modal do PDF
+      function closePdfModal() {
+        document.getElementById('pdf-modal').classList.remove('active');
+        // Mostra o overlay novamente quando o modal for reaberto
+        document.getElementById('page-info-overlay').style.display = 'block';
+      }
+
+      // Função para mostrar o modal de riscos
+      function showRiskModal(bairro) {
+        const modal = document.getElementById('risk-modal');
+        document.getElementById('modal-bairro-title').textContent = bairro;
+        modal.style.display = 'flex';
+      }
+
+      // Função para fechar o modal de riscos
+      function closeRiskModal() {
+        document.getElementById('risk-modal').style.display = 'none';
+      }
+
+      // Função para mostrar os setores
+      function showSectors(risco) {
+        const bairro = document.getElementById('modal-bairro-title').textContent;
+        const setores = setoresData[bairro]?.[risco] || [];
+        
+        const modal = document.getElementById('sectors-modal');
+        const title = document.getElementById('sectors-title');
+        const list = document.getElementById('sectors-list');
+        
+        title.textContent = `${bairro} - ${risco}`;
+        list.innerHTML = '';
+        
+        setores.forEach(setor => {
+          const button = document.createElement('button');
+          button.className = 'sector-button';
+          button.textContent = setor;
+          button.onclick = () => {
+            const coords = coordenadasSetores[setor];
+            if (coords) {
+              focarCoordenada(coords.x, coords.y);
+            }
+            // Extrair apenas o número do setor (S1, S2, etc.)
+            const setorNumero = setor.split('-')[0];
+            abrirPDFnaPagina(setorNumero);
+            closeAllModals();
+          };
+          list.appendChild(button);
+        });
+        
+        modal.style.display = 'block';
+      }
+
+      // Função para fechar o modal de setores
+      function closeSectorsModal() {
+        document.getElementById('sectors-modal').style.display = 'none';
+      }
+
+      // Função para fechar todos os modais
+      function closeAllModals() {
+        closeRiskModal();
+        closeSectorsModal();
+      }
+
+      // Variáveis e funções do mapa
+      let scale = 1;
+      const MAX_ZOOM = 6;
+      const MIN_ZOOM = 0.5;
+      let translateX = 0;
+      let translateY = 0;
+      let startX, startY;
+      let isDragging = false;
+
+      const mapaContainer = document.getElementById('mapa-container');
+      const mapaWrapper = document.getElementById('mapa-wrapper');
+      const infoZoom = document.getElementById('info-zoom');
+
+      function applyTransform() {
+        mapaWrapper.style.transform = `translate(${translateX}px, ${translateY}px) scale(${scale})`;
+        infoZoom.textContent = `Zoom: ${Math.round(scale * 100)}%`;
+      }
+
+      function ajustarLimitesMapa() {
+        const containerWidth = mapaContainer.offsetWidth;
+        const containerHeight = mapaContainer.offsetHeight;
+        const mapaWidth = mapaWrapper.offsetWidth * scale;
+        const mapaHeight = mapaWrapper.offsetHeight * scale;
+        
+        const minX = containerWidth - mapaWidth;
+        const minY = containerHeight - mapaHeight;
+        
+        if (mapaWidth > containerWidth) {
+          translateX = Math.min(0, Math.max(minX, translateX));
+        } else {
+          translateX = (containerWidth - mapaWidth) / 2;
+        }
+        
+        if (mapaHeight > containerHeight) {
+          translateY = Math.min(0, Math.max(minY, translateY));
+        } else {
+          translateY = (containerHeight - mapaHeight) / 2;
+        }
+      }
+
+      function focarCoordenada(xPercent, yPercent) {
+        const mapa = document.getElementById('mapa');
+        const containerWidth = mapaContainer.offsetWidth;
+        const containerHeight = mapaContainer.offsetHeight;
+        const mapaWidth = mapa.offsetWidth;
+        const mapaHeight = mapa.offsetHeight;
+        
+        scale = MAX_ZOOM;
+        
+        translateX = (containerWidth / 2) - (mapaWidth * (xPercent / 100) * scale);
+        translateY = (containerHeight / 2) - (mapaHeight * (yPercent / 100) * scale);
+        
+        ajustarLimitesMapa();
+        applyTransform();
+      }
+
+      function mostrarCoordenadas(e) {
+        const mapa = document.getElementById('mapa');
+        const rect = mapa.getBoundingClientRect();
+        const naturalWidth = mapa.naturalWidth;
+        const naturalHeight = mapa.naturalHeight;
+        
+        const x = ((e.clientX - rect.left) / rect.width) * 100;
+        const y = ((e.clientY - rect.top) / rect.height) * 100;
+        
+        const coordenadasInfo = document.getElementById('coordenadas-info');
+        coordenadasInfo.textContent = `X: ${x.toFixed(2)}%, Y: ${y.toFixed(2)}%`;
+      }
+
+      function zoomIn() {
+        if (scale < MAX_ZOOM) {
+          const containerRect = mapaContainer.getBoundingClientRect();
+          const centerX = containerRect.width / 2;
+          const centerY = containerRect.height / 2;
+          
+          const oldScale = scale;
+          scale *= 1.2;
+          
+          const scaleFactor = scale / oldScale;
+          const currentCenterX = centerX - translateX;
+          const currentCenterY = centerY - translateY;
+          
+          translateX = centerX - currentCenterX * scaleFactor;
+          translateY = centerY - currentCenterY * scaleFactor;
+          
+          ajustarLimitesMapa();
+          applyTransform();
+        }
+      }
+
+      function zoomOut() {
+        if (scale > MIN_ZOOM) {
+          const containerRect = mapaContainer.getBoundingClientRect();
+          const centerX = containerRect.width / 2;
+          const centerY = containerRect.height / 2;
+          
+          const oldScale = scale;
+          scale /= 1.2;
+          
+          const scaleFactor = scale / oldScale;
+          const currentCenterX = centerX - translateX;
+          const currentCenterY = centerY - translateY;
+          
+          translateX = centerX - currentCenterX * scaleFactor;
+          translateY = centerY - currentCenterY * scaleFactor;
+          
+          ajustarLimitesMapa();
+          applyTransform();
+        }
+      }
+
+      function resetZoom() {
+        scale = 1.5;
+        const containerWidth = mapaContainer.offsetWidth;
+        const containerHeight = mapaContainer.offsetHeight;
+        const mapaWidth = mapaWrapper.offsetWidth * scale;
+        const mapaHeight = mapaWrapper.offsetHeight * scale;
+        
+        translateX = (containerWidth - mapaWidth) / 2;
+        translateY = (containerHeight - mapaHeight) / 2;
+        
+        applyTransform();
+      }
+
+      function startDrag(e) {
+        const clientX = e.clientX || (e.touches && e.touches[0] ? e.touches[0].clientX : null);
+        const clientY = e.clientY || (e.touches && e.touches[0] ? e.touches[0].clientY : null);
+        
+        if (clientX === null || clientY === null) return;
+        
+        isDragging = true;
+        startX = clientX - translateX;
+        startY = clientY - translateY;
+        mapaWrapper.classList.add('grabbing');
+        
+        e.preventDefault();
+      }
+
+      function onDrag(e) {
+        if (!isDragging) return;
+        
+        const clientX = e.clientX || (e.touches && e.touches[0] ? e.touches[0].clientX : null);
+        const clientY = e.clientY || (e.touches && e.touches[0] ? e.touches[0].clientY : null);
+        
+        if (clientX === null || clientY === null) return;
+        
+        translateX = clientX - startX;
+        translateY = clientY - startY;
+        
+        ajustarLimitesMapa();
+        applyTransform();
+        
+        e.preventDefault();
+      }
+
+      function endDrag() {
+        isDragging = false;
+        mapaWrapper.classList.remove('grabbing');
+      }
+
+      function handleWheel(e) {
+        e.preventDefault();
+        
+        const rect = mapaContainer.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+        
+        const x = (mouseX - translateX) / scale;
+        const y = (mouseY - translateY) / scale;
+        
+        const delta = e.deltaY > 0 ? 0.9 : 1.1;
+        
+        const newScale = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, scale * delta));
+        
+        if (newScale === scale) return;
+        
+        translateX = mouseX - x * newScale;
+        translateY = mouseY - y * newScale;
+        scale = newScale;
+        
+        ajustarLimitesMapa();
+        applyTransform();
+      }
+
+      // Toggle da sidebar
+      document.getElementById('toggle-sidebar').onclick = function() {
+        document.getElementById('sidebar').classList.toggle('collapsed');
+      };
+
+      // Busca de bairros
+      document.getElementById('search-bairro').oninput = function(e) {
+        popularBairros(e.target.value);
+      };
+
+      // Eventos do mapa
+      mapaWrapper.addEventListener('mousedown', startDrag);
+      document.addEventListener('mousemove', onDrag);
+      document.addEventListener('mouseup', endDrag);
+      
+      mapaWrapper.addEventListener('touchstart', startDrag);
+      document.addEventListener('touchmove', onDrag);
+      document.addEventListener('touchend', endDrag);
+      
+      mapaContainer.addEventListener('wheel', handleWheel, { passive: false });
+      
+      // Eventos de coordenadas
+      mapaContainer.addEventListener('mousemove', mostrarCoordenadas);
+      mapaContainer.addEventListener('mouseleave', () => {
+        document.getElementById('coordenadas-info').textContent = '';
+      });
+
+      // Fechar modais ao clicar fora
+      window.onclick = function(event) {
+        const riskModal = document.getElementById('risk-modal');
+        const sectorsModal = document.getElementById('sectors-modal');
+        const pdfModal = document.getElementById('pdf-modal');
+        
+        if (event.target === riskModal) {
+          closeRiskModal();
+        }
+        if (event.target === sectorsModal) {
+          closeSectorsModal();
+        }
+        if (event.target === pdfModal) {
+          closePdfModal();
+        }
+      };
+
+      // Inicialização
+      window.addEventListener('load', () => {
+        popularBairros();
+        resetZoom();
+      });
+    </script>
+  </body>
+</html>
